@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vitaent Offline Fallback</title>
+  <style>
+    :root {
+      --brand-primary: #0ea5e9;
+      --brand-secondary: #22c55e;
+    }
+    body { font-family: Arial, sans-serif; margin: 0; background: #f1f5f9; color: #0f172a; }
+    .wrap { max-width: 860px; margin: 24px auto; padding: 0 16px; }
+    .card { background: white; border-radius: 10px; padding: 16px; box-shadow: 0 3px 14px rgba(0,0,0,.08); margin-bottom: 16px; }
+    h1 { margin: 0 0 12px; color: var(--brand-primary); }
+    button { border: 0; border-radius: 8px; padding: 10px 14px; color: #fff; cursor: pointer; }
+    .primary { background: var(--brand-primary); }
+    .secondary { background: var(--brand-secondary); }
+    .dark { background: #0f172a; }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    input { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; margin-top: 6px; }
+    label { display: block; margin-top: 10px; font-weight: 600; }
+    pre { background: #0f172a; color: #e2e8f0; border-radius: 8px; padding: 12px; overflow: auto; }
+    .muted { color: #64748b; font-size: 14px; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <h1>Vitaent Offline/No-Install Fallback UI</h1>
+    <p class="muted">This plain HTML page is meant for constrained environments where Docker/npm are unavailable.</p>
+  </div>
+
+  <div class="card">
+    <h2>Login</h2>
+    <label>Email <input id="email" type="email" value="admin@clinic1.local" /></label>
+    <label>Password <input id="password" type="password" value="Admin123!" /></label>
+    <div class="row" style="margin-top:12px;">
+      <button class="primary" id="btnSignIn">Sign in</button>
+      <button class="secondary" id="btnRefresh">Refresh session</button>
+      <button class="dark" id="btnSignOut">Sign out</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Tenant</h2>
+    <div class="row">
+      <button class="primary" id="btnBranding">Load branding</button>
+      <button class="primary" id="btnTenantMe">Load tenant me</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Output</h2>
+    <pre id="output">Ready.</pre>
+  </div>
+</div>
+
+<script>
+  const tenantQuery = '?tenant=clinic1';
+  let accessToken = sessionStorage.getItem('vitaent_access_token') || null;
+
+  const output = document.getElementById('output');
+  function log(data) {
+    output.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
+  }
+
+  async function api(path, options = {}, useAuth = false) {
+    const headers = Object.assign({}, options.headers || {});
+    if (options.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json';
+    if (useAuth && accessToken) headers['Authorization'] = `Bearer ${accessToken}`;
+
+    const response = await fetch(path, Object.assign({}, options, { headers, credentials: 'include' }));
+    const text = await response.text();
+    let data;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text; }
+
+    if (!response.ok) {
+      throw new Error(`${response.status} ${response.statusText}\n${typeof data === 'string' ? data : JSON.stringify(data)}`);
+    }
+
+    return data;
+  }
+
+  async function loadBranding() {
+    try {
+      const payload = await api(`/api/tenant/branding${tenantQuery}`);
+      const parsed = JSON.parse(payload.json || '{}');
+      document.documentElement.style.setProperty('--brand-primary', parsed.primary || parsed.primaryColor || '#0ea5e9');
+      document.documentElement.style.setProperty('--brand-secondary', parsed.secondary || '#22c55e');
+      log({ ok: true, branding: parsed });
+    } catch (err) {
+      log(`Branding error: ${err.message}`);
+    }
+  }
+
+  async function signIn() {
+    try {
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const result = await api(`/api/auth/sign-in${tenantQuery}`, {
+        method: 'POST',
+        body: JSON.stringify({ email, password })
+      });
+
+      accessToken = result.accessToken;
+      sessionStorage.setItem('vitaent_access_token', accessToken);
+      log(result);
+    } catch (err) {
+      log(`Sign-in error: ${err.message}`);
+    }
+  }
+
+  async function refreshSession() {
+    try {
+      const result = await api(`/api/auth/refresh${tenantQuery}`, { method: 'POST' });
+      accessToken = result.accessToken;
+      sessionStorage.setItem('vitaent_access_token', accessToken);
+      log(result);
+    } catch (err) {
+      log(`Refresh error: ${err.message}`);
+    }
+  }
+
+  async function signOut() {
+    try {
+      await api(`/api/auth/sign-out${tenantQuery}`, { method: 'POST' }, true);
+      accessToken = null;
+      sessionStorage.removeItem('vitaent_access_token');
+      log({ ok: true, message: 'Signed out' });
+    } catch (err) {
+      log(`Sign-out error: ${err.message}`);
+    }
+  }
+
+  async function tenantMe() {
+    try {
+      const result = await api(`/api/tenant/me${tenantQuery}`, {}, true);
+      log(result);
+    } catch (err) {
+      log(`Tenant me error: ${err.message}`);
+    }
+  }
+
+  document.getElementById('btnSignIn').addEventListener('click', signIn);
+  document.getElementById('btnRefresh').addEventListener('click', refreshSession);
+  document.getElementById('btnSignOut').addEventListener('click', signOut);
+  document.getElementById('btnTenantMe').addEventListener('click', tenantMe);
+  document.getElementById('btnBranding').addEventListener('click', loadBranding);
+
+  loadBranding();
+</script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: vitaent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: vitaent
+      POSTGRES_USER: vitaent
+      POSTGRES_PASSWORD: vitaent
+    ports:
+      - "5432:5432"
+    volumes:
+      - vitaent_postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build:
+      context: ./vitaent/backend
+      dockerfile: Dockerfile
+    container_name: vitaent-backend
+    restart: unless-stopped
+    depends_on:
+      - postgres
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=vitaent;Username=vitaent;Password=vitaent
+      Jwt__Issuer: Vitaent.Api.Dev
+      Jwt__Audience: Vitaent.Api.Client
+      Jwt__SigningKey: dev-only-super-secret-signing-key-change-me-123456
+      Jwt__AccessTokenMinutes: 30
+      Jwt__RefreshTokenDays: 7
+    ports:
+      - "5080:5080"
+
+  frontend:
+    build:
+      context: ./vitaent/frontend
+      dockerfile: Dockerfile
+    container_name: vitaent-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+
+volumes:
+  vitaent_postgres_data:
