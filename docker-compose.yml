@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: vitaent-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: vitaent
+      POSTGRES_USER: vitaent
+      POSTGRES_PASSWORD: vitaent
+    ports:
+      - "5432:5432"
+    volumes:
+      - vitaent_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  vitaent_postgres_data:
