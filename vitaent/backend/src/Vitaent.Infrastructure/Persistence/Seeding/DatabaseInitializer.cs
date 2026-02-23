@@ -22,6 +22,7 @@ public static class DatabaseInitializer
                 if (dbContext.Database.IsRelational())
                 {
                     await dbContext.Database.MigrateAsync(cancellationToken);
+                    await EnsureSchemaIsReadyAsync(dbContext, cancellationToken);
                 }
 
                 await DevelopmentSeed.SeedAsync(dbContext, cancellationToken);
@@ -62,5 +63,23 @@ public static class DatabaseInitializer
         }
 
         return false;
+    }
+
+    private static async Task EnsureSchemaIsReadyAsync(AppDbContext dbContext, CancellationToken cancellationToken)
+    {
+        const string schemaCheckSql = """
+            SELECT COUNT(*)
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+              AND table_name IN ('tenants', 'tenant_brandings', 'users', 'refresh_tokens', 'doctors', 'appointments');
+            """;
+
+        var tableCount = await dbContext.Database.SqlQueryRaw<int>(schemaCheckSql)
+            .SingleAsync(cancellationToken);
+
+        if (tableCount < 6)
+        {
+            throw new InvalidOperationException("Schema validation failed after migration. Expected tables were not found.");
+        }
     }
 }
