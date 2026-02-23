@@ -15,7 +15,6 @@ using Vitaent.Api.Middleware;
 using Vitaent.Api.Tenancy;
 using Vitaent.Domain.Entities;
 using Vitaent.Infrastructure.Persistence;
-using Vitaent.Infrastructure.Persistence.Seeding;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -60,7 +59,17 @@ builder.Services.AddScoped<RefreshTokenCookieService>();
 
 var app = builder.Build();
 
-await DatabaseInitializer.InitializeAsync(app.Services, app.Logger);
+try
+{
+    using var scope = app.Services.CreateScope();
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    dbContext.Database.Migrate();
+}
+catch (Exception ex)
+{
+    app.Logger.LogCritical(ex, "Failed to apply database migrations during startup.");
+    throw;
+}
 
 var fallbackUiPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "frontend-static"));
 if (Directory.Exists(fallbackUiPath))
