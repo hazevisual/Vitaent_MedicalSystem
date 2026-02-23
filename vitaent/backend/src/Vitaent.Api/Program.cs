@@ -58,6 +58,12 @@ builder.Services.AddScoped<RefreshTokenCookieService>();
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
+}
+
 var fallbackUiPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "frontend-static"));
 if (Directory.Exists(fallbackUiPath))
 {
@@ -381,6 +387,12 @@ app.MapGet("/api/appointments", async (DateTimeOffset from, DateTimeOffset to, A
 .WithOpenApi();
 
 app.MapAuthEndpoints();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
+}
 
 app.Run();
 
