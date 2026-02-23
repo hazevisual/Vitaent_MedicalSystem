@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiFetch } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { getTenantSlug, withTenant } from '../tenancy/tenant';
 
 type Doctor = {
   id: string;
@@ -47,6 +48,7 @@ function parseApiError(error: unknown): ValidationProblem {
 export function SchedulePage() {
   const { accessToken } = useAuth();
   const queryClient = useQueryClient();
+  const tenantSlug = getTenantSlug();
 
   const now = new Date();
   const defaultFrom = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
@@ -62,17 +64,17 @@ export function SchedulePage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const doctorsQuery = useQuery({
-    queryKey: ['doctors'],
-    queryFn: () => apiFetch<Doctor[]>('/api/doctors?tenant=clinic1', { token: accessToken })
+    queryKey: ['doctors', tenantSlug],
+    queryFn: () => apiFetch<Doctor[]>(withTenant('/api/doctors'), { token: accessToken })
   });
 
   const fromIso = useMemo(() => new Date(fromLocal).toISOString(), [fromLocal]);
   const toIso = useMemo(() => new Date(toLocal).toISOString(), [toLocal]);
 
   const appointmentsQuery = useQuery({
-    queryKey: ['appointments', fromIso, toIso],
+    queryKey: ['appointments', tenantSlug, fromIso, toIso],
     queryFn: () =>
-      apiFetch<Appointment[]>(`/api/appointments?tenant=clinic1&from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`, {
+      apiFetch<Appointment[]>(`${withTenant('/api/appointments')}&from=${encodeURIComponent(fromIso)}&to=${encodeURIComponent(toIso)}`, {
         token: accessToken
       })
   });
@@ -82,7 +84,7 @@ export function SchedulePage() {
       const startsAt = new Date(startsAtLocal);
       const endsAt = new Date(startsAt.getTime() + durationMinutes * 60 * 1000);
 
-      return apiFetch<Appointment>('/api/appointments?tenant=clinic1', {
+      return apiFetch<Appointment>(withTenant('/api/appointments'), {
         method: 'POST',
         token: accessToken,
         body: JSON.stringify({

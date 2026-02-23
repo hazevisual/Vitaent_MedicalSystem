@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { apiFetch } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { withTenant } from '../tenancy/tenant';
 
 type TenantMe = {
   tenantId: string;
@@ -19,18 +20,18 @@ export function DashboardPage() {
 
   const tenantQuery = useQuery({
     queryKey: ['tenant-me'],
-    queryFn: () => apiFetch<TenantMe>('/api/tenant/me?tenant=clinic1', { token: accessToken })
+    queryFn: () => apiFetch<TenantMe>(withTenant('/api/tenant/me'), { token: accessToken })
   });
 
   const refreshSession = async () => {
-    const result = await apiFetch<RefreshResponse>('/api/auth/refresh?tenant=clinic1', {
+    const result = await apiFetch<RefreshResponse>(withTenant('/api/auth/refresh'), {
       method: 'POST'
     });
     updateToken(result.accessToken);
   };
 
   const signOut = async () => {
-    await apiFetch<void>('/api/auth/sign-out?tenant=clinic1', {
+    await apiFetch<void>(withTenant('/api/auth/sign-out'), {
       method: 'POST',
       token: accessToken
     });
