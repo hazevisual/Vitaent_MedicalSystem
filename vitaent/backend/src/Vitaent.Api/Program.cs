@@ -105,12 +105,19 @@ app.UseAuthorization();
 
 app.MapGet("/health", async (AppDbContext dbContext) =>
 {
-    if (!await dbContext.Database.CanConnectAsync())
+    try
+    {
+        if (!await dbContext.Database.CanConnectAsync())
+        {
+            return Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Database not ready");
+        }
+
+        return Results.Ok("OK");
+    }
+    catch
     {
         return Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Database not ready");
     }
-
-    return Results.Ok("OK");
 })
    .WithName("Health")
    .WithOpenApi()
