@@ -1,7 +1,8 @@
-using Vitaent.Application.Tenancy;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using Vitaent.Application.Tenancy;
 using Vitaent.Api.Tenancy;
 using Vitaent.Infrastructure.Persistence;
 
@@ -25,40 +26,58 @@ public class TenantResolutionMiddleware(RequestDelegate next)
 
         if (string.IsNullOrWhiteSpace(slug))
         {
-            await WriteTenantNotFoundAsync(context);
+            await WriteProblemAsync(context, StatusCodes.Status404NotFound, "Tenant not found", "Tenant not found");
             return;
         }
 
-        var tenant = await dbContext.Tenants
-            .AsNoTracking()
-            .SingleOrDefaultAsync(x => x.Slug == slug && x.IsActive);
-
-        if (tenant is null)
+        try
         {
-            await WriteTenantNotFoundAsync(context);
-            return;
+            var tenant = await dbContext.Tenants
+                .AsNoTracking()
+                .SingleOrDefaultAsync(x => x.Slug == slug && x.IsActive);
+
+            if (tenant is null)
+            {
+                await WriteProblemAsync(context, StatusCodes.Status404NotFound, "Tenant not found", "Tenant not found");
+                return;
+            }
+
+            context.Items["TenantId"] = tenant.Id;
+            context.Items["TenantSlug"] = tenant.Slug;
+
+            tenantContext.TenantId = tenant.Id;
+            tenantContext.TenantSlug = tenant.Slug;
+
+            await next(context);
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UndefinedTable)
+        {
+            await WriteProblemAsync(context,
+                StatusCodes.Status503ServiceUnavailable,
+                "Tenant resolution unavailable",
+                "Database schema is not initialized yet. Please retry shortly.");
         }
 
-        context.Items["TenantId"] = tenant.Id;
-        context.Items["TenantSlug"] = tenant.Slug;
-
-        tenantContext.TenantId = tenant.Id;
-        tenantContext.TenantSlug = tenant.Slug;
-
-        await next(context);
+        catch (NpgsqlException)
+        {
+            await WriteProblemAsync(context,
+                StatusCodes.Status503ServiceUnavailable,
+                "Tenant resolution unavailable",
+                "Database is not available yet. Please retry shortly.");
+        }
     }
 
-    private static async Task WriteTenantNotFoundAsync(HttpContext context)
+    private static async Task WriteProblemAsync(HttpContext context, int statusCode, string title, string detail)
     {
-        context.Response.StatusCode = StatusCodes.Status404NotFound;
+        context.Response.StatusCode = statusCode;
         context.Response.ContentType = "application/problem+json";
 
         var problem = new ProblemDetails
         {
-            Status = StatusCodes.Status404NotFound,
-            Title = "Tenant not found",
-            Detail = "Tenant not found",
-            Type = "https://httpstatuses.com/404"
+            Status = statusCode,
+            Title = title,
+            Detail = detail,
+            Type = $"https://httpstatuses.com/{statusCode}"
         };
 
         await context.Response.WriteAsync(JsonSerializer.Serialize(problem));
