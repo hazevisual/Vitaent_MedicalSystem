@@ -20,4 +20,9 @@
     <ProjectReference Include="../Vitaent.Application/Vitaent.Application.csproj" />
     <ProjectReference Include="../Vitaent.Domain/Vitaent.Domain.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Update="Persistence/Migrations/**/*.cs">
+      <Visible>false</Visible>
+    </Compile>
+  </ItemGroup>
 </Project>

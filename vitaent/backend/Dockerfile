@@ -11,7 +11,8 @@ RUN dotnet publish src/Vitaent.Api/Vitaent.Api.csproj \
     -o /app/publish \
     /p:UseAppHost=false \
     /p:DebugType=none \
-    /p:DebugSymbols=false
+    /p:DebugSymbols=false \
+    /p:PublishTrimmed=false
 
 # Runtime stage
 FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine
