@@ -10,7 +10,7 @@ public static class DatabaseInitializer
 {
     public static async Task InitializeAsync(IServiceProvider services, ILogger logger, CancellationToken cancellationToken = default)
     {
-        const int maxAttempts = 10;
+        const int maxAttempts = 6;
 
         for (var attempt = 1; attempt <= maxAttempts; attempt++)
         {
@@ -29,9 +29,17 @@ public static class DatabaseInitializer
                 logger.LogInformation("Database migrations and seed completed successfully.");
                 return;
             }
-            catch (Exception ex) when (IsTransient(ex) && attempt < maxAttempts)
+            catch (Exception ex) when (IsTransient(ex))
             {
-                var delaySeconds = Math.Min(30, (int)Math.Pow(2, attempt - 1));
+                if (attempt == maxAttempts)
+                {
+                    logger.LogCritical(ex,
+                        "Database initialization failed after {MaxAttempts} attempts.",
+                        maxAttempts);
+                    throw new InvalidOperationException("Database initialization failed after all retry attempts.", ex);
+                }
+
+                var delaySeconds = Math.Min(5, (int)Math.Pow(2, attempt - 1));
                 logger.LogWarning(ex,
                     "Database initialization attempt {Attempt}/{MaxAttempts} failed. Retrying in {DelaySeconds}s.",
                     attempt,
@@ -39,9 +47,12 @@ public static class DatabaseInitializer
                     delaySeconds);
                 await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken);
             }
+            catch (Exception ex)
+            {
+                logger.LogCritical(ex, "Database initialization failed due to a non-transient error.");
+                throw;
+            }
         }
-
-        throw new InvalidOperationException("Database initialization failed after all retry attempts.");
     }
 
     private static bool IsTransient(Exception exception)
@@ -71,7 +82,7 @@ public static class DatabaseInitializer
             SELECT COUNT(*)
             FROM information_schema.tables
             WHERE table_schema = 'public'
-              AND table_name IN ('tenants', 'tenant_brandings', 'users', 'refresh_tokens', 'doctors', 'appointments');
+              AND table_name IN ('tenants', 'tenant_branding', 'users', 'refresh_tokens', 'doctors', 'appointments');
             """;
 
         var tableCount = await dbContext.Database.SqlQueryRaw<int>(schemaCheckSql)

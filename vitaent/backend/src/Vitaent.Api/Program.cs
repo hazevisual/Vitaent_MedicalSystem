@@ -15,6 +15,7 @@ using Vitaent.Api.Middleware;
 using Vitaent.Api.Tenancy;
 using Vitaent.Domain.Entities;
 using Vitaent.Infrastructure.Persistence;
+using Vitaent.Infrastructure.Persistence.Seeding;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -61,13 +62,11 @@ var app = builder.Build();
 
 try
 {
-    using var scope = app.Services.CreateScope();
-    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    dbContext.Database.Migrate();
+    await DatabaseInitializer.InitializeAsync(app.Services, app.Logger);
 }
 catch (Exception ex)
 {
-    app.Logger.LogCritical(ex, "Failed to apply database migrations during startup.");
+    app.Logger.LogCritical(ex, "Backend startup initialization failed. Exiting.");
     throw;
 }
 
@@ -104,7 +103,15 @@ app.UseMiddleware<TenantResolutionMiddleware>();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/health", () => Results.Ok("OK"))
+app.MapGet("/health", async (AppDbContext dbContext) =>
+{
+    if (!await dbContext.Database.CanConnectAsync())
+    {
+        return Results.Problem(statusCode: StatusCodes.Status503ServiceUnavailable, title: "Database not ready");
+    }
+
+    return Results.Ok("OK");
+})
    .WithName("Health")
    .WithOpenApi()
    .AllowAnonymous();
