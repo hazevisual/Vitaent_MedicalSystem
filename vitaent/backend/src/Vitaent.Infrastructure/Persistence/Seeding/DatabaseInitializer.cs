@@ -71,7 +71,7 @@ public static class DatabaseInitializer
             SELECT COUNT(*)
             FROM information_schema.tables
             WHERE table_schema = 'public'
-              AND table_name IN ('tenants', 'tenant_brandings', 'users', 'refresh_tokens', 'doctors', 'appointments');
+              AND table_name IN ('tenants', 'tenant_branding', 'users', 'refresh_tokens', 'doctors', 'appointments');
             """;
 
         var tableCount = await dbContext.Database.SqlQueryRaw<int>(schemaCheckSql)
