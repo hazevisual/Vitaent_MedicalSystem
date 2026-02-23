@@ -51,18 +51,16 @@ builder.Services.AddAuthorization(options =>
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
+    options.UseNpgsql(
+        builder.Configuration.GetConnectionString("Postgres"),
+        npgsqlOptions => npgsqlOptions.MigrationsAssembly("Vitaent.Infrastructure")));
 builder.Services.AddScoped<ITenantContext, TenantContext>();
 builder.Services.AddSingleton<ITenantSlugResolver, TenantSlugResolver>();
 builder.Services.AddScoped<RefreshTokenCookieService>();
 
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    db.Database.Migrate();
-}
+await DatabaseInitializer.InitializeAsync(app.Services, app.Logger);
 
 var fallbackUiPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "frontend-static"));
 if (Directory.Exists(fallbackUiPath))
@@ -88,22 +86,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 
     using var scope = app.Services.CreateScope();
-    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
-    if (dbContext.Database.IsRelational())
-    {
-        dbContext.Database.Migrate();
-    }
-
-    try
-    {
-        await DevelopmentSeed.SeedAsync(dbContext);
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Error seeding development data");
-    }
+    logger.LogInformation("Development environment initialized with automatic migration and seed.");
 }
 
 app.UseMiddleware<TenantResolutionMiddleware>();
@@ -170,7 +155,7 @@ app.MapGet("/api/tenant/branding", async (ITenantContext tenantContext, AppDbCon
 
     var branding = await dbContext.TenantBrandings
         .AsNoTracking()
-        .SingleOrDefaultAsync();
+        .SingleOrDefaultAsync(x => x.TenantId == tenantContext.TenantId);
 
     return branding is null
         ? Results.NotFound(new { message = "Branding not found" })

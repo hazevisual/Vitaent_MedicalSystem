@@ -23,7 +23,7 @@ vitaent/
 Build and run the full stack (Postgres + Backend + Frontend):
 
 ```bash
-docker compose up --build
+docker compose up -d --build
 ```
 
 Then open:
@@ -42,6 +42,16 @@ Stop stack:
 ```bash
 docker compose down
 ```
+
+### What happens automatically in Docker
+
+On backend startup, the API now automatically:
+
+1. Applies EF Core migrations to the Postgres database.
+2. Seeds a default tenant `clinic1` (idempotent).
+3. Seeds default branding for `clinic1` so `/api/tenant/branding?tenant=clinic1` returns a valid payload.
+
+No manual host-side `dotnet ef` command is required.
 
 Stop and reset database volume:
 
@@ -188,3 +198,70 @@ Example duplicate-slot error (409 ProblemDetails):
 cd vitaent/backend
 dotnet test
 ```
+
+
+## Docker verification commands
+
+After `docker compose up -d --build`, verify everything is initialized:
+
+```bash
+# verify containers
+docker compose ps
+
+# verify DB tables (including tenants)
+docker compose exec postgres psql -U vitaent -d vitaent -c "\dt"
+
+# verify seeded tenant exists
+docker compose exec postgres psql -U vitaent -d vitaent -c "select slug, name, is_active from tenants;"
+
+# branding endpoint through frontend proxy
+curl -i "http://localhost:5173/api/tenant/branding?tenant=clinic1"
+```
+
+Expected result:
+
+- `tenants` table exists.
+- `clinic1` row exists.
+- branding endpoint responds `200 OK` with JSON payload for `clinic1`.
+
+## Docker troubleshooting
+
+- If startup was interrupted, retry with:
+
+```bash
+docker compose down
+docker compose up -d --build
+```
+
+- To reset to a clean database state:
+
+```bash
+docker compose down -v
+docker compose up -d --build
+```
+
+- Backend logs (migration/seed status):
+
+```bash
+docker compose logs -f backend
+```
+
+
+## Acceptance validation steps
+
+Run the exact fresh-volume validation flow:
+
+```bash
+docker compose down -v
+docker compose up -d --build
+docker compose exec postgres psql -U vitaent -d vitaent -c "\dt"
+docker compose exec postgres psql -U vitaent -d vitaent -c "select slug from tenants where slug='clinic1';"
+curl -i "http://localhost:5173/api/tenant/branding?tenant=clinic1"
+```
+
+Expected:
+
+- tables exist (including `tenants`).
+- `clinic1` exists in `tenants`.
+- branding endpoint returns `200` for `clinic1`.
+- frontend login page loads at `http://localhost:5173` without hanging loader.
