@@ -58,6 +58,12 @@ builder.Services.AddScoped<RefreshTokenCookieService>();
 
 var app = builder.Build();
 
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
+}
+
 var fallbackUiPath = Path.GetFullPath(Path.Combine(builder.Environment.ContentRootPath, "..", "frontend-static"));
 if (Directory.Exists(fallbackUiPath))
 {
@@ -83,13 +89,21 @@ if (app.Environment.IsDevelopment())
 
     using var scope = app.Services.CreateScope();
     var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
 
     if (dbContext.Database.IsRelational())
     {
         dbContext.Database.Migrate();
     }
 
-    await DevelopmentSeed.SeedAsync(dbContext);
+    try
+    {
+        await DevelopmentSeed.SeedAsync(dbContext);
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Error seeding development data");
+    }
 }
 
 app.UseMiddleware<TenantResolutionMiddleware>();
@@ -202,10 +216,16 @@ app.MapPost("/api/appointments", async (CreateAppointmentRequest request, AppDbC
         errors["patientName"] = ["patientName must be between 2 and 120 characters."];
     }
 
-    if (string.IsNullOrWhiteSpace(request.DoctorId) || !Guid.TryParse(request.DoctorId, out var doctorId))
-    {
-        errors["doctorId"] = ["doctorId must be a valid GUID."];
-    }
+    Guid doctorId = default;
+
+if (string.IsNullOrWhiteSpace(request.DoctorId))
+{
+    errors["doctorId"] = ["doctorId must be a valid GUID."];
+}
+else if (!Guid.TryParse(request.DoctorId, out doctorId))
+{
+    errors["doctorId"] = ["doctorId must be a valid GUID."];
+}
 
     if (request.StartsAt == default)
     {
@@ -367,6 +387,12 @@ app.MapGet("/api/appointments", async (DateTimeOffset from, DateTimeOffset to, A
 .WithOpenApi();
 
 app.MapAuthEndpoints();
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
+}
 
 app.Run();
 

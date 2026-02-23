@@ -1,0 +1,15 @@
+bin/
+obj/
+.vs/
+.git/
+.gitignore
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.env*
+!.env.example
