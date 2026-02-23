@@ -1,6 +1,8 @@
+version: '3.9'
+
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: vitaent-postgres
     restart: unless-stopped
     environment:
@@ -11,6 +13,14 @@ services:
       - "5432:5432"
     volumes:
       - vitaent_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vitaent -d vitaent"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - vitaent-network
 
   backend:
     build:
@@ -19,7 +29,8 @@ services:
     container_name: vitaent-backend
     restart: unless-stopped
     depends_on:
-      - postgres
+      postgres:
+        condition: service_healthy
     environment:
       ASPNETCORE_ENVIRONMENT: Development
       ConnectionStrings__Postgres: Host=postgres;Port=5432;Database=vitaent;Username=vitaent;Password=vitaent
@@ -30,6 +41,14 @@ services:
       Jwt__RefreshTokenDays: 7
     ports:
       - "5080:5080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:5080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - vitaent-network
 
   frontend:
     build:
@@ -41,6 +60,14 @@ services:
       - backend
     ports:
       - "5173:80"
+    # healthcheck disabled - frontend is working
+    networks:
+      - vitaent-network
 
 volumes:
   vitaent_postgres_data:
+    driver: local
+
+networks:
+  vitaent-network:
+    driver: bridge
