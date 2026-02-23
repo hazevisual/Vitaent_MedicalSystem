@@ -1,4 +1,5 @@
 import { apiFetch } from '../api/client';
+import { withTenant } from '../tenancy/tenant';
 
 type BrandingPayload = {
   json: string;
@@ -17,7 +18,7 @@ function applyBranding(branding: { primary?: string; secondary?: string }) {
 
 export async function loadBranding() {
   try {
-    const payload = await apiFetch<BrandingPayload>('/api/tenant/branding?tenant=clinic1');
+    const payload = await apiFetch<BrandingPayload>(withTenant('/api/tenant/branding'));
     const parsed = JSON.parse(payload.json) as { primary?: string; primaryColor?: string; secondary?: string };
 
     applyBranding({

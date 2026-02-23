@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
 import { apiFetch } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { withTenant } from '../tenancy/tenant';
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -39,7 +40,7 @@ export function LoginPage() {
     setLoading(true);
 
     try {
-      const response = await apiFetch<SignInResponse>('/api/auth/sign-in?tenant=clinic1', {
+      const response = await apiFetch<SignInResponse>(withTenant('/api/auth/sign-in'), {
         method: 'POST',
         body: JSON.stringify(parsed.data)
       });
